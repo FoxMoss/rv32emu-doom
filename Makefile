@@ -27,7 +27,7 @@ ENABLE_MOP_FUSION ?= 1
 $(call set-feature, MOP_FUSION)
 
 # Enable block chaining, easier for ablation study
-ENABLE_BLOCK_CHAINING ?= 1
+ENABLE_BLOCK_CHAINING ?= 0
 $(call set-feature, BLOCK_CHAINING)
 
 # Enable logging with color
@@ -74,7 +74,7 @@ ENABLE_ARCH_TEST ?= 0
 $(call set-feature, ARCH_TEST)
 
 # Enable link-time optimization (LTO)
-ENABLE_LTO ?= 1
+ENABLE_LTO ?= 0
 ifeq ($(call has, LTO), 1)
 ifeq ("$(CC_IS_CLANG)$(CC_IS_GCC)$(CC_IS_EMCC)", "")
 $(warning LTO is only supported in clang, gcc and emcc.)

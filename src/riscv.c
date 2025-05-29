@@ -462,7 +462,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
      */
     attr->fd_map = map_init(int, FILE *, map_cmp_int);
     rv_remap_stdstream(rv,
-                       (fd_stream_pair_t[]){
+                       (fd_stream_pair_t[]) {
                            {STDIN_FILENO, stdin},
                            {STDOUT_FILENO, stdout},
                            {STDERR_FILENO, stderr},
@@ -777,8 +777,8 @@ void rv_reset(riscv_t *rv, riscv_word_t pc)
     rv->PC = pc;
 
     /* set the default stack pointer */
-    rv->X[rv_reg_sp] =
-        attr->mem_size - attr->stack_size - attr->args_offset_size;
+    // TODO: hardcoded for testing doom.sh
+    rv->X[rv_reg_sp] = 0x00011180;
 
     /* Store 'argc' and 'args' of the target program in 'state->mem'. Thus,
      * we can use an offset trick to emulate 32/64-bit target programs on

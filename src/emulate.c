@@ -244,7 +244,7 @@ static uint32_t csr_csrrc(riscv_t *rv, uint32_t csr, uint32_t val)
 void rv_debug(riscv_t *rv)
 {
     if (!gdbstub_init(&rv->gdbstub, &gdbstub_ops,
-                      (arch_info_t){
+                      (arch_info_t) {
                           .reg_num = 33,
                           .target_desc = TARGET_RV32,
                       },
@@ -374,35 +374,55 @@ static uint32_t peripheral_update_ctr = 64;
 #endif
 
 /* Interpreter-based execution path */
-#define RVOP(inst, code, asm)                                               \
-    static bool do_##inst(riscv_t *rv, const rv_insn_t *ir, uint64_t cycle, \
-                          uint32_t PC)                                      \
-    {                                                                       \
-        IIF(RV32_HAS(SYSTEM))(rv->timer++;, ) cycle++;                      \
-        code;                                                               \
-        IIF(RV32_HAS(SYSTEM))                                               \
-        (                                                                   \
-            if (need_handle_signal) {                                       \
-                need_handle_signal = false;                                 \
-                return true;                                                \
-            }, ) nextop : PC += __rv_insn_##inst##_len;                     \
-        IIF(RV32_HAS(SYSTEM))                                               \
-        (IIF(RV32_HAS(JIT))(                                                \
-             , if (unlikely(need_clear_block_map)) {                        \
-                 block_map_clear(rv);                                       \
-                 need_clear_block_map = false;                              \
-                 rv->csr_cycle = cycle;                                     \
-                 rv->PC = PC;                                               \
-                 return false;                                              \
-             }), );                                                         \
-        if (unlikely(RVOP_NO_NEXT(ir)))                                     \
-            goto end_op;                                                    \
-        const rv_insn_t *next = ir->next;                                   \
-        MUST_TAIL return next->impl(rv, next, cycle, PC);                   \
-    end_op:                                                                 \
-        rv->csr_cycle = cycle;                                              \
-        rv->PC = PC;                                                        \
-        return true;                                                        \
+#define RVOP(inst, code, asm)                                                  \
+    static bool do_##inst(riscv_t *rv, const rv_insn_t *ir, uint64_t cycle,    \
+                          uint32_t PC)                                         \
+    {                                                                          \
+        FILE *file = fopen("./asm.dump2", "a");                                \
+        fprintf(file, "PC: %08x ", PC);                                        \
+        fprintf(file, "[0x%08x] ", rv->io.mem_read_w(rv, PC) & 0xffffffff);    \
+        fprintf(                                                               \
+            file,                                                              \
+            "Z:%08x ra:%08x sp:%08x gp:%08x tp:%08x t0:%08x t1:%08x t2:%08x "  \
+            "s0:%08x s1:%08x a0:%08x a1:%08x a2:%08x a3:%08x a4:%08x "         \
+            "a5:%08x ",                                                        \
+            rv->X[0], rv->X[1], rv->X[2], rv->X[3], rv->X[4], rv->X[5],        \
+            rv->X[6], rv->X[7], rv->X[8], rv->X[9], rv->X[10], rv->X[11],      \
+            rv->X[12], rv->X[13], rv->X[14], rv->X[15]);                       \
+        fprintf(                                                               \
+            file,                                                              \
+            "a6:%08x a7:%08x s2:%08x s3:%08x s4:%08x s5:%08x s6:%08x s7:%08x " \
+            "s8:%08x s9:%08x s10:%08x s11:%08x t3:%08x t4:%08x t5:%08x "       \
+            "t6:%08x\n",                                                       \
+            rv->X[16], rv->X[17], rv->X[18], rv->X[19], rv->X[20], rv->X[21],  \
+            rv->X[22], rv->X[23], rv->X[24], rv->X[25], rv->X[26], rv->X[27],  \
+            rv->X[28], rv->X[29], rv->X[30], rv->X[31]);                       \
+        fclose(file);                                                          \
+        IIF(RV32_HAS(SYSTEM))(rv->timer++;, ) cycle++;                         \
+        code;                                                                  \
+        IIF(RV32_HAS(SYSTEM))                                                  \
+        (                                                                      \
+            if (need_handle_signal) {                                          \
+                need_handle_signal = false;                                    \
+                return true;                                                   \
+            }, ) nextop : PC += __rv_insn_##inst##_len;                        \
+        IIF(RV32_HAS(SYSTEM))                                                  \
+        (IIF(RV32_HAS(JIT))(                                                   \
+             , if (unlikely(need_clear_block_map)) {                           \
+                 block_map_clear(rv);                                          \
+                 need_clear_block_map = false;                                 \
+                 rv->csr_cycle = cycle;                                        \
+                 rv->PC = PC;                                                  \
+                 return false;                                                 \
+             }), );                                                            \
+        if (unlikely(RVOP_NO_NEXT(ir)))                                        \
+            goto end_op;                                                       \
+        const rv_insn_t *next = ir->next;                                      \
+        MUST_TAIL return next->impl(rv, next, cycle, PC);                      \
+    end_op:                                                                    \
+        rv->csr_cycle = cycle;                                                 \
+        rv->PC = PC;                                                           \
+        return true;                                                           \
     }
 
 #include "rv32_template.c"
@@ -1082,11 +1102,11 @@ void rv_step(void *arg)
             PRIV(rv)->on_exit = true;
 #endif
 
-            /* After emulating the previous block, it is determined whether the
-             * branch is taken or not. The IR array of the current block is then
-             * assigned to either the branch_taken or branch_untaken pointer of
-             * the previous block.
-             */
+        /* After emulating the previous block, it is determined whether the
+         * branch is taken or not. The IR array of the current block is then
+         * assigned to either the branch_taken or branch_untaken pointer of
+         * the previous block.
+         */
 
 #if RV32_HAS(BLOCK_CHAINING)
         if (prev
@@ -1333,6 +1353,28 @@ void ebreak_handler(riscv_t *rv)
 void ecall_handler(riscv_t *rv)
 {
     assert(rv);
+
+    switch (rv_get_reg(rv, rv_reg_a7)) {
+    case 64: {
+        riscv_word_t len = rv_get_reg(rv, rv_reg_a2);
+        riscv_word_t addr = rv_get_reg(rv, rv_reg_a1);
+        for (riscv_word_t i = 0; i < len; i++) {
+            putchar(rv->io.mem_read_b(rv, i + addr));
+        }
+        break;
+    }
+    case 94:
+        [[fallthrough]];
+    case 95:
+        [[fallthrough]];
+    case 93: {
+        exit(1);
+        break;
+    }
+    default: {
+        printf("%i a7 was.\n", rv_get_reg(rv, rv_reg_a7));
+    }
+    }
 
 #if RV32_HAS(ELF_LOADER)
     rv->PC += 4;
