@@ -120,6 +120,7 @@
  */
 
 /* Internal */
+#include <stdio.h>
 RVOP(nop, { rv->X[rv_reg_zero] = 0; }, GEN({/* no operation */}))
 
 /* LUI is used to build 32-bit constants and uses the U-type format. LUI
@@ -161,7 +162,7 @@ RVOP(
         /* link with return address */
         if (ir->rd)
             rv->X[ir->rd] = pc + 4;
-        /* check instruction misaligned */
+    /* check instruction misaligned */
 #if !RV32_HAS(EXT_C)
         RV_EXC_MISALIGN_HANDLER(pc, INSN, false, 0);
 #endif
@@ -311,7 +312,7 @@ RVOP(
         /* link */
         if (ir->rd)
             rv->X[ir->rd] = pc + 4;
-        /* check instruction misaligned */
+    /* check instruction misaligned */
 #if !RV32_HAS(EXT_C)
         RV_EXC_MISALIGN_HANDLER(pc, INSN, false, 0);
 #endif

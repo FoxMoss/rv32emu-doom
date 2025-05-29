@@ -746,97 +746,98 @@ static inline void remove_next_nth_ir(const riscv_t *rv,
  * Strategies are being devised to increase the number of instructions that
  * match the pattern, including possible instruction reordering.
  */
-static void match_pattern(riscv_t *rv, block_t *block)
-{
-    uint32_t i;
-    rv_insn_t *ir;
-    for (i = 0, ir = block->ir_head; i < block->n_insn - 1;
-         i++, ir = ir->next) {
-        assert(ir);
-        rv_insn_t *next_ir = NULL;
-        int32_t count = 0;
-        switch (ir->opcode) {
-        case rv_insn_lui:
-            next_ir = ir->next;
-            switch (next_ir->opcode) {
-            case rv_insn_add:
-                if (ir->rd == next_ir->rs2 || ir->rd == next_ir->rs1) {
-                    ir->opcode = rv_insn_fuse2;
-                    ir->rs2 = next_ir->rd;
-                    if (ir->rd == next_ir->rs2)
-                        ir->rs1 = next_ir->rs1;
-                    else
-                        ir->rs1 = next_ir->rs2;
-                    ir->impl = dispatch_table[ir->opcode];
-                    remove_next_nth_ir(rv, ir, block, 1);
-                }
-                break;
-            case rv_insn_lui:
-                count = 1;
-                while (1) {
-                    if (!IF_insn(next_ir, lui))
-                        break;
-                    count++;
-                    if (!next_ir->next)
-                        break;
-                    next_ir = next_ir->next;
-                }
-                if (count > 1) {
-                    ir->opcode = rv_insn_fuse1;
-                    ir->fuse = malloc(count * sizeof(opcode_fuse_t));
-                    assert(ir->fuse);
-                    ir->imm2 = count;
-                    memcpy(ir->fuse, ir, sizeof(opcode_fuse_t));
-                    ir->impl = dispatch_table[ir->opcode];
-                    next_ir = ir->next;
-                    for (int j = 1; j < count; j++, next_ir = next_ir->next)
-                        memcpy(ir->fuse + j, next_ir, sizeof(opcode_fuse_t));
-                    remove_next_nth_ir(rv, ir, block, count - 1);
-                }
-                break;
-            }
-            break;
-        /* If the memory addresses of a sequence of store or load instructions
-         * are contiguous, combine these instructions.
-         */
-        case rv_insn_sw:
-            COMBINE_MEM_OPS(0);
-            break;
-        case rv_insn_lw:
-            COMBINE_MEM_OPS(1);
-            break;
-            /* TODO: mixture of SW and LW */
-            /* TODO: reorder insturction to match pattern */
-        case rv_insn_slli:
-        case rv_insn_srli:
-        case rv_insn_srai:
-            count = 1;
-            next_ir = ir->next;
-            while (1) {
-                if (!IF_insn(next_ir, slli) && !IF_insn(next_ir, srli) &&
-                    !IF_insn(next_ir, srai))
-                    break;
-                count++;
-                if (!next_ir->next)
-                    break;
-                next_ir = next_ir->next;
-            }
-            if (count > 1) {
-                ir->fuse = malloc(count * sizeof(opcode_fuse_t));
-                assert(ir->fuse);
-                memcpy(ir->fuse, ir, sizeof(opcode_fuse_t));
-                ir->opcode = rv_insn_fuse5;
-                ir->imm2 = count;
-                ir->impl = dispatch_table[ir->opcode];
-                next_ir = ir->next;
-                for (int j = 1; j < count; j++, next_ir = next_ir->next)
-                    memcpy(ir->fuse + j, next_ir, sizeof(opcode_fuse_t));
-                remove_next_nth_ir(rv, ir, block, count - 1);
-            }
-            break;
-        }
-    }
-}
+// static void match_pattern(riscv_t *rv, block_t *block)
+// {
+//     uint32_t i;
+//     rv_insn_t *ir;
+//     for (i = 0, ir = block->ir_head; i < block->n_insn - 1;
+//          i++, ir = ir->next) {
+//         assert(ir);
+//         rv_insn_t *next_ir = NULL;
+//         int32_t count = 0;
+//         switch (ir->opcode) {
+//         case rv_insn_lui:
+//             next_ir = ir->next;
+//             switch (next_ir->opcode) {
+//             case rv_insn_add:
+//                 if (ir->rd == next_ir->rs2 || ir->rd == next_ir->rs1) {
+//                     ir->opcode = rv_insn_fuse2;
+//                     ir->rs2 = next_ir->rd;
+//                     if (ir->rd == next_ir->rs2)
+//                         ir->rs1 = next_ir->rs1;
+//                     else
+//                         ir->rs1 = next_ir->rs2;
+//                     ir->impl = dispatch_table[ir->opcode];
+//                     remove_next_nth_ir(rv, ir, block, 1);
+//                 }
+//                 break;
+//             case rv_insn_lui:
+//                 count = 1;
+//                 while (1) {
+//                     if (!IF_insn(next_ir, lui))
+//                         break;
+//                     count++;
+//                     if (!next_ir->next)
+//                         break;
+//                     next_ir = next_ir->next;
+//                 }
+//                 if (count > 1) {
+//                     ir->opcode = rv_insn_fuse1;
+//                     ir->fuse = malloc(count * sizeof(opcode_fuse_t));
+//                     assert(ir->fuse);
+//                     ir->imm2 = count;
+//                     memcpy(ir->fuse, ir, sizeof(opcode_fuse_t));
+//                     ir->impl = dispatch_table[ir->opcode];
+//                     next_ir = ir->next;
+//                     for (int j = 1; j < count; j++, next_ir = next_ir->next)
+//                         memcpy(ir->fuse + j, next_ir, sizeof(opcode_fuse_t));
+//                     remove_next_nth_ir(rv, ir, block, count - 1);
+//                 }
+//                 break;
+//             }
+//             break;
+//         /* If the memory addresses of a sequence of store or load
+//         instructions
+//          * are contiguous, combine these instructions.
+//          */
+//         case rv_insn_sw:
+//             COMBINE_MEM_OPS(0);
+//             break;
+//         case rv_insn_lw:
+//             COMBINE_MEM_OPS(1);
+//             break;
+//             /* TODO: mixture of SW and LW */
+//             /* TODO: reorder insturction to match pattern */
+//         case rv_insn_slli:
+//         case rv_insn_srli:
+//         case rv_insn_srai:
+//             count = 1;
+//             next_ir = ir->next;
+//             while (1) {
+//                 if (!IF_insn(next_ir, slli) && !IF_insn(next_ir, srli) &&
+//                     !IF_insn(next_ir, srai))
+//                     break;
+//                 count++;
+//                 if (!next_ir->next)
+//                     break;
+//                 next_ir = next_ir->next;
+//             }
+//             if (count > 1) {
+//                 ir->fuse = malloc(count * sizeof(opcode_fuse_t));
+//                 assert(ir->fuse);
+//                 memcpy(ir->fuse, ir, sizeof(opcode_fuse_t));
+//                 ir->opcode = rv_insn_fuse5;
+//                 ir->imm2 = count;
+//                 ir->impl = dispatch_table[ir->opcode];
+//                 next_ir = ir->next;
+//                 for (int j = 1; j < count; j++, next_ir = next_ir->next)
+//                     memcpy(ir->fuse + j, next_ir, sizeof(opcode_fuse_t));
+//                 remove_next_nth_ir(rv, ir, block, count - 1);
+//             }
+//             break;
+//         }
+//     }
+// }
 #endif
 
 typedef struct {
@@ -915,7 +916,7 @@ static block_t *block_find_or_translate(riscv_t *rv)
     optimize_constant(rv, next_blk);
 #if RV32_HAS(MOP_FUSION)
     /* macro operation fusion */
-    match_pattern(rv, next_blk);
+    // match_pattern(rv, next_blk);
 #endif
 
 #if !RV32_HAS(JIT)
@@ -1376,36 +1377,7 @@ void ecall_handler(riscv_t *rv)
     }
     }
 
-#if RV32_HAS(ELF_LOADER)
     rv->PC += 4;
-    syscall_handler(rv);
-#elif RV32_HAS(SYSTEM)
-    if (rv->priv_mode == RV_PRIV_U_MODE) {
-        switch (rv_get_reg(
-            rv,
-            rv_reg_a7)) { /* trap guestOS's SDL-oriented application syscall */
-        case 0xBEEF:
-        case 0xC0DE:
-        case 0xFEED:
-        case 0xBABE:
-        case 0xD00D:
-        case 93:
-            syscall_handler(rv);
-            rv->PC += 4;
-            break;
-        default:
-            SET_CAUSE_AND_TVAL_THEN_TRAP(rv, ECALL_U, 0);
-            break;
-        }
-    } else if (rv->priv_mode ==
-               RV_PRIV_S_MODE) { /* trap to SBI syscall handler */
-        rv->PC += 4;
-        syscall_handler(rv);
-    }
-#else
-    SET_CAUSE_AND_TVAL_THEN_TRAP(rv, ECALL_M, 0);
-    syscall_handler(rv);
-#endif
 }
 
 void memset_handler(riscv_t *rv)
