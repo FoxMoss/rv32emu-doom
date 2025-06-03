@@ -778,7 +778,7 @@ void rv_reset(riscv_t *rv, riscv_word_t pc)
 
     /* set the default stack pointer */
     // TODO: hardcoded for testing doom.sh
-    rv->X[rv_reg_sp] = 0x00011180;
+    rv->X[rv_reg_sp] = 0x2633b1a0;
 
     /* Store 'argc' and 'args' of the target program in 'state->mem'. Thus,
      * we can use an offset trick to emulate 32/64-bit target programs on

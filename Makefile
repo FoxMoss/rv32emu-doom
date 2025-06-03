@@ -23,7 +23,7 @@ ENABLE_ELF_LOADER ?= 0
 $(call set-feature, ELF_LOADER)
 
 # Enable MOP fusion, easier for ablation study
-ENABLE_MOP_FUSION ?= 1
+ENABLE_MOP_FUSION ?= 0
 $(call set-feature, MOP_FUSION)
 
 # Enable block chaining, easier for ablation study
@@ -31,7 +31,7 @@ ENABLE_BLOCK_CHAINING ?= 0
 $(call set-feature, BLOCK_CHAINING)
 
 # Enable logging with color
-ENABLE_LOG_COLOR ?= 1
+ENABLE_LOG_COLOR ?= 0
 $(call set-feature, LOG_COLOR)
 
 # Enable system emulation
@@ -111,7 +111,7 @@ ENABLE_EXT_A ?= 1
 $(call set-feature, EXT_A)
 
 # Single-precision floating point instructions
-ENABLE_EXT_F ?= 1
+ENABLE_EXT_F ?= 0
 $(call set-feature, EXT_F)
 ifeq ($(call has, EXT_F), 1)
 AR := ar
@@ -135,7 +135,7 @@ LDFLAGS += -lm
 endif
 
 # Compressed extension instructions
-ENABLE_EXT_C ?= 1
+ENABLE_EXT_C ?= 0
 $(call set-feature, EXT_C)
 
 # RV32E Base Integer Instruction Set
@@ -169,7 +169,7 @@ $(call set-feature, Zbs)
 ENABLE_FULL4G ?= 0
 
 # Experimental SDL oriented system calls
-ENABLE_SDL ?= 1
+ENABLE_SDL ?= 0
 ifneq ("$(CC_IS_EMCC)", "1") # note that emcc generates port SDL headers/library, so it does not requires system SDL headers/library
 ifeq ($(call has, SDL), 1)
 ifeq (, $(shell which sdl2-config))
