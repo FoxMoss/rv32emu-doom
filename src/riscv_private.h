@@ -131,6 +131,7 @@ struct riscv_internal {
     riscv_word_t PC;
 
     uint64_t timer; /* strictly increment timer */
+    time_t time;
 
 #if RV32_HAS(JIT) && RV32_HAS(SYSTEM)
     /*

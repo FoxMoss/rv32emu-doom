@@ -445,6 +445,8 @@ riscv_t *rv_create(riscv_user_t rv_attr)
     /* copy over the attr */
     rv->data = rv_attr;
 
+    rv->time = time(0);
+
     vm_attr_t *attr = PRIV(rv);
     attr->mem = memory_new(attr->mem_size);
     assert(attr->mem);

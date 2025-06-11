@@ -4,6 +4,7 @@
  */
 
 #include <assert.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +16,6 @@
 
 #include "io.h"
 
-static uint8_t *data_memory_base;
 
 memory_t *memory_new(uint32_t size)
 {
@@ -39,6 +39,7 @@ memory_t *memory_new(uint32_t size)
     }
 #endif
     mem->mem_base = data_memory_base;
+    data_memory_base_size = size;
     mem->mem_size = size;
     return mem;
 }
@@ -58,6 +59,14 @@ void memory_read(const memory_t *mem,
                  uint32_t addr,
                  uint32_t size)
 {
+    if (max_addr < addr) {
+        max_addr = addr;
+        printf("max addr %u\n", max_addr);
+    }
+    if (min_addr > addr) {
+        min_addr = addr;
+        printf("min addr %u\n", max_addr);
+    }
     memcpy(dst, mem->mem_base + addr, size);
 }
 
@@ -69,6 +78,14 @@ uint32_t memory_ifetch(uint32_t addr)
 #define MEM_READ_IMPL(size, type)                   \
     type memory_read_##size(uint32_t addr)          \
     {                                               \
+        if (max_addr < addr) {                      \
+            max_addr = addr;                        \
+            printf("max addr %u\n", max_addr);      \
+        }                                           \
+        if (min_addr > addr) {                      \
+            min_addr = addr;                        \
+            printf("min addr %u\n", max_addr);      \
+        }                                           \
         return *(type *) (data_memory_base + addr); \
     }
 
@@ -76,9 +93,18 @@ MEM_READ_IMPL(w, uint32_t)
 MEM_READ_IMPL(s, uint16_t)
 MEM_READ_IMPL(b, uint8_t)
 
+
 #define MEM_WRITE_IMPL(size, type)                                 \
     void memory_write_##size(uint32_t addr, const uint8_t *src)    \
     {                                                              \
+        if (max_addr < addr) {                                     \
+            max_addr = addr;                                       \
+            printf("max addr %u\n", max_addr);                     \
+        }                                                          \
+        if (min_addr > addr) {                                     \
+            min_addr = addr;                                       \
+            printf("min addr %u\n", max_addr);                     \
+        }                                                          \
         *(type *) (data_memory_base + addr) = *(const type *) src; \
     }
 

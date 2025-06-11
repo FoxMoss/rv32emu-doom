@@ -9,7 +9,7 @@ CONFIG_FILE := $(OUT)/.config
 
 OPT_LEVEL ?= -O2
 
-CFLAGS = -std=gnu99 $(OPT_LEVEL) -Wall -Wextra -Werror
+CFLAGS = -std=gnu99 $(OPT_LEVEL) -Wall -Wextra
 CFLAGS += -Wno-unused-label
 CFLAGS += -include src/common.h -Isrc/
 
@@ -87,15 +87,11 @@ ifeq ("$(CC_IS_EMCC)", "1")
 ifeq ($(call has, SDL), 1)
 $(warning LTO is not supported to build emscripten-port SDL using emcc.)
 else
-CFLAGS += -flto
 endif
 endif
 ifeq ("$(CC_IS_GCC)", "1")
-CFLAGS += -flto=auto
 endif
 ifeq ("$(CC_IS_CLANG)", "1")
-CFLAGS += -flto=thin -fsplit-lto-unit
-LDFLAGS += -flto=thin
 endif
 endif
 

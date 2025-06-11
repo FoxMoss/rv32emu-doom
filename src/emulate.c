@@ -4,12 +4,65 @@
  */
 
 #include <assert.h>
+#include <fcntl.h>
+#include <math.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/select.h>
+#include <termios.h>
+#include <unistd.h>
+#include "io.h"
+
+struct termios orig_termios;
+
+void reset_terminal_mode()
+{
+    tcsetattr(0, TCSANOW, &orig_termios);
+}
+
+void set_conio_terminal_mode()
+{
+    struct termios new_termios;
+
+    /* take two copies - one for now, one for later */
+    tcgetattr(0, &orig_termios);
+    memcpy(&new_termios, &orig_termios, sizeof(new_termios));
+
+    /* register cleanup handler, and set the new terminal mode */
+    atexit(reset_terminal_mode);
+    cfmakeraw(&new_termios);
+    tcsetattr(0, TCSANOW, &new_termios);
+}
+
+int kbhit()
+{
+    struct timeval tv = {0L, 0L};
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(0, &fds);
+    return select(1, &fds, NULL, NULL, &tv) > 0;
+}
+
+int getch()
+{
+    int r;
+    unsigned char c;
+    if ((r = read(0, &c, sizeof(c))) < 0) {
+        return r;
+    } else {
+        return c;
+    }
+}
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -373,56 +426,56 @@ extern void emu_update_uart_interrupts(riscv_t *rv);
 static uint32_t peripheral_update_ctr = 64;
 #endif
 
+// FILE *file = fopen("./asm.dump2", "a");                                \
+        // fprintf(file, "PC: %08x ", PC);                                        \
+        // fprintf(file, "[0x%08x] ", rv->io.mem_read_w(rv, PC) & 0xffffffff);    \
+        // fprintf(                                                               \
+        //     file,                                                              \
+        //     "Z:%08x ra:%08x sp:%08x gp:%08x tp:%08x t0:%08x t1:%08x t2:%08x "  \
+        //     "s0:%08x s1:%08x a0:%08x a1:%08x a2:%08x a3:%08x a4:%08x "         \
+        //     "a5:%08x ",                                                        \
+        //     rv->X[0], rv->X[1], rv->X[2], rv->X[3], rv->X[4], rv->X[5],        \
+        //     rv->X[6], rv->X[7], rv->X[8], rv->X[9], rv->X[10], rv->X[11],      \
+        //     rv->X[12], rv->X[13], rv->X[14], rv->X[15]);                       \
+        // fprintf(                                                               \
+        //     file,                                                              \
+        //     "a6:%08x a7:%08x s2:%08x s3:%08x s4:%08x s5:%08x s6:%08x s7:%08x " \
+        //     "s8:%08x s9:%08x s10:%08x s11:%08x t3:%08x t4:%08x t5:%08x "       \
+        //     "t6:%08x\n",                                                       \
+        //     rv->X[16], rv->X[17], rv->X[18], rv->X[19], rv->X[20], rv->X[21],  \
+        //     rv->X[22], rv->X[23], rv->X[24], rv->X[25], rv->X[26], rv->X[27],  \
+        //     rv->X[28], rv->X[29], rv->X[30], rv->X[31]);                       \
+        // fclose(file);                                                          \
 /* Interpreter-based execution path */
-#define RVOP(inst, code, asm)                                                  \
-    static bool do_##inst(riscv_t *rv, const rv_insn_t *ir, uint64_t cycle,    \
-                          uint32_t PC)                                         \
-    {                                                                          \
-        FILE *file = fopen("./asm.dump2", "a");                                \
-        fprintf(file, "PC: %08x ", PC);                                        \
-        fprintf(file, "[0x%08x] ", rv->io.mem_read_w(rv, PC) & 0xffffffff);    \
-        fprintf(                                                               \
-            file,                                                              \
-            "Z:%08x ra:%08x sp:%08x gp:%08x tp:%08x t0:%08x t1:%08x t2:%08x "  \
-            "s0:%08x s1:%08x a0:%08x a1:%08x a2:%08x a3:%08x a4:%08x "         \
-            "a5:%08x ",                                                        \
-            rv->X[0], rv->X[1], rv->X[2], rv->X[3], rv->X[4], rv->X[5],        \
-            rv->X[6], rv->X[7], rv->X[8], rv->X[9], rv->X[10], rv->X[11],      \
-            rv->X[12], rv->X[13], rv->X[14], rv->X[15]);                       \
-        fprintf(                                                               \
-            file,                                                              \
-            "a6:%08x a7:%08x s2:%08x s3:%08x s4:%08x s5:%08x s6:%08x s7:%08x " \
-            "s8:%08x s9:%08x s10:%08x s11:%08x t3:%08x t4:%08x t5:%08x "       \
-            "t6:%08x\n",                                                       \
-            rv->X[16], rv->X[17], rv->X[18], rv->X[19], rv->X[20], rv->X[21],  \
-            rv->X[22], rv->X[23], rv->X[24], rv->X[25], rv->X[26], rv->X[27],  \
-            rv->X[28], rv->X[29], rv->X[30], rv->X[31]);                       \
-        fclose(file);                                                          \
-        IIF(RV32_HAS(SYSTEM))(rv->timer++;, ) cycle++;                         \
-        code;                                                                  \
-        IIF(RV32_HAS(SYSTEM))                                                  \
-        (                                                                      \
-            if (need_handle_signal) {                                          \
-                need_handle_signal = false;                                    \
-                return true;                                                   \
-            }, ) nextop : PC += __rv_insn_##inst##_len;                        \
-        IIF(RV32_HAS(SYSTEM))                                                  \
-        (IIF(RV32_HAS(JIT))(                                                   \
-             , if (unlikely(need_clear_block_map)) {                           \
-                 block_map_clear(rv);                                          \
-                 need_clear_block_map = false;                                 \
-                 rv->csr_cycle = cycle;                                        \
-                 rv->PC = PC;                                                  \
-                 return false;                                                 \
-             }), );                                                            \
-        if (unlikely(RVOP_NO_NEXT(ir)))                                        \
-            goto end_op;                                                       \
-        const rv_insn_t *next = ir->next;                                      \
-        MUST_TAIL return next->impl(rv, next, cycle, PC);                      \
-    end_op:                                                                    \
-        rv->csr_cycle = cycle;                                                 \
-        rv->PC = PC;                                                           \
-        return true;                                                           \
+#define RVOP(inst, code, asm)                                               \
+    static bool do_##inst(riscv_t *rv, const rv_insn_t *ir, uint64_t cycle, \
+                          uint32_t PC)                                      \
+    {                                                                       \
+        IIF(RV32_HAS(SYSTEM))(rv->timer++;, ) cycle++;                      \
+        code;                                                               \
+        IIF(RV32_HAS(SYSTEM))                                               \
+        (                                                                   \
+            if (need_handle_signal) {                                       \
+                need_handle_signal = false;                                 \
+                return true;                                                \
+            }, ) nextop : PC += __rv_insn_##inst##_len;                     \
+        IIF(RV32_HAS(SYSTEM))                                               \
+        (IIF(RV32_HAS(JIT))(                                                \
+             , if (unlikely(need_clear_block_map)) {                        \
+                 block_map_clear(rv);                                       \
+                 need_clear_block_map = false;                              \
+                 rv->csr_cycle = cycle;                                     \
+                 rv->PC = PC;                                               \
+                 return false;                                              \
+             }), );                                                         \
+        if (unlikely(RVOP_NO_NEXT(ir)))                                     \
+            goto end_op;                                                    \
+        const rv_insn_t *next = ir->next;                                   \
+        MUST_TAIL return next->impl(rv, next, cycle, PC);                   \
+    end_op:                                                                 \
+        rv->csr_cycle = cycle;                                              \
+        rv->PC = PC;                                                        \
+        return true;                                                        \
     }
 
 #include "rv32_template.c"
@@ -1351,6 +1404,30 @@ void ebreak_handler(riscv_t *rv)
     SET_CAUSE_AND_TVAL_THEN_TRAP(rv, BREAKPOINT, rv->PC);
 }
 
+void rv_savestate(riscv_t *rv)
+{
+    static int savestate_id;
+    char filename[256];
+    snprintf((char *) &filename, 256, "./regs%i", savestate_id);
+    FILE *f = fopen(filename, "w");
+    for (unsigned i = 0; i < N_RV_REGS; i++) {
+        fprintf(f, "register %d %u\n", i, rv->X[i]);
+    }
+    fprintf(f, "register pc %u\n", rv->PC);
+    fclose(f);
+
+    vm_attr_t *attr = PRIV(rv);
+
+    snprintf((char *) &filename, 256, "./mem%i", savestate_id);
+    f = fopen(filename, "w");
+    printf("%lu\n", attr->mem->mem_size);
+    fwrite(attr->mem->mem_base, attr->mem->mem_size, 1, f);
+    fclose(f);
+
+
+    savestate_id++;
+}
+
 void ecall_handler(riscv_t *rv)
 {
     assert(rv);
@@ -1361,6 +1438,32 @@ void ecall_handler(riscv_t *rv)
         riscv_word_t addr = rv_get_reg(rv, rv_reg_a1);
         for (riscv_word_t i = 0; i < len; i++) {
             putchar(rv->io.mem_read_b(rv, i + addr));
+        }
+        break;
+    }
+    case 65: {
+        size_t t = round(difftime(time(0), rv->time)) * 70;
+        rv_set_reg(rv, rv_reg_a1, t);
+        break;
+    }
+    case 66: {
+        // rv_savestate(rv);
+        // exit(1);
+        fcntl(0, F_SETFL, O_NONBLOCK);
+        int key = 0;
+        if (read(0, &key, 1) == 0) {
+            key = 0;
+        }
+        fcntl(0, F_SETFL, 0);
+        rv_set_reg(rv, rv_reg_a1, key);
+        break;
+    }
+    case 68: {
+        riscv_word_t dest = rv_get_reg(rv, rv_reg_a1);
+        riscv_word_t src = rv_get_reg(rv, rv_reg_a2);
+        riscv_word_t len = rv_get_reg(rv, rv_reg_a3);
+        for (riscv_word_t i = 0; i < len; i++) {
+            rv->io.mem_write_b(rv, dest + i, rv->io.mem_read_b(rv, i + src));
         }
         break;
     }

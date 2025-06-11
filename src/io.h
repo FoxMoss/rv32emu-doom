@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -14,6 +15,8 @@ typedef struct {
     uint64_t mem_size;
 } memory_t;
 
+static uint8_t *data_memory_base;
+static size_t data_memory_base_size;
 /* create a memory instance */
 memory_t *memory_new(uint32_t size);
 
@@ -61,3 +64,5 @@ static inline void memory_fill(memory_t *m,
 {
     memset(m->mem_base + addr, val, size);
 }
+static uint32_t max_addr = 0;
+static uint32_t min_addr = 0;
