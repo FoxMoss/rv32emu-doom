@@ -1447,15 +1447,13 @@ void ecall_handler(riscv_t *rv)
         break;
     }
     case 66: {
-        // rv_savestate(rv);
-        // exit(1);
         fcntl(0, F_SETFL, O_NONBLOCK);
         int key = 0;
         if (read(0, &key, 1) == 0) {
             key = 0;
         }
         fcntl(0, F_SETFL, 0);
-        rv_set_reg(rv, rv_reg_a1, key);
+        rv_set_reg(rv, rv_reg_a1, 10);
         break;
     }
     case 68: {
@@ -1465,6 +1463,80 @@ void ecall_handler(riscv_t *rv)
         for (riscv_word_t i = 0; i < len; i++) {
             rv->io.mem_write_b(rv, dest + i, rv->io.mem_read_b(rv, i + src));
         }
+        break;
+    }
+    case 69: {
+        // rv_savestate(rv);
+        // exit(1);
+        riscv_word_t column = rv_get_reg(rv, rv_reg_a1);
+        riscv_word_t screenwidth = rv_get_reg(rv, rv_reg_a2);
+        riscv_word_t desttop = rv_get_reg(rv, rv_reg_a3);
+
+        while (true) {
+            riscv_word_t topdelta = rv->io.mem_read_b(rv, column);
+            if (topdelta == 255) {
+                break;
+            }
+
+            riscv_word_t source = column + 3;
+            riscv_word_t dest = desttop + topdelta * screenwidth;
+            riscv_word_t count = rv->io.mem_read_b(rv, column + 1);
+
+            while (count > 0) {
+                rv->io.mem_write_b(rv, dest, rv->io.mem_read_b(rv, source));
+                source++;
+                dest += screenwidth;
+                count--;
+            }
+
+            column += rv->io.mem_read_b(rv, column + 1) + 4;
+        }
+        break;
+    }
+    case 70: {
+        uint32_t lump_p = rv_get_reg(rv, rv_reg_a1);
+        uint32_t lump_info = rv_get_reg(rv, rv_reg_a2);
+        uint32_t lump_length = rv_get_reg(rv, rv_reg_a3);
+        uint32_t name = rv_get_reg(rv, rv_reg_a4);
+        uint32_t numlumps = rv_get_reg(rv, rv_reg_a5);
+
+        char namestr[8 + 1] = {0};  // +1 for null terminator
+        for (uint32_t i = 0; i < 8; i++) {
+            namestr[i] = rv->io.mem_read_b(rv, name + i);
+        }
+        namestr[8] = '\0';
+
+        rv_set_reg(rv, rv_reg_a1, numlumps + 1);
+        while (true) {
+            char current_name[8 + 1] = {0};
+            for (uint32_t i = 0; i < 8; i++) {
+                current_name[i] = rv->io.mem_read_b(rv, lump_p + i);
+            }
+            current_name[8] = '\0';
+
+
+            if (strcmp(namestr, current_name) == 0) {
+                uint32_t index = (lump_p - lump_info) / lump_length;
+                rv_set_reg(rv, rv_reg_a1, index);
+                break;
+            }
+
+            if (lump_p == lump_info) {
+                break;
+            }
+            lump_p -= lump_length;
+        }
+
+        break;
+    }
+    case 71: {
+        uint32_t i = rv_get_reg(rv, rv_reg_a1);
+        printf("%i", i);
+        break;
+    }
+    case 92: {
+        // rv_savestate(rv);
+        // exit(1);
         break;
     }
     case 94:
